@@ -34,6 +34,38 @@ export const LIBRARY: ConnectorDef[] = [
   { id: 'orange6',  name: 'Оранжевый 6-пин',        alias: 'ORANGE-6',      color: '#7a4400', rows: 2, cols: 3, pin_shape: 'rect',   lock: 'top' },
   { id: 'green6',   name: 'Зелёный 6-пин',           alias: 'GREEN-6',       color: '#1a4a2a', rows: 2, cols: 3, pin_shape: 'rect',   lock: 'top' },
   { id: 'blue6',    name: 'Синий 6-пин',             alias: 'BLUE-6',        color: '#1a2a5a', rows: 2, cols: 3, pin_shape: 'rect',   lock: 'top' },
+
+  // ── Крупные многопиновые ─────────────────────────────────────────
+  { id: 'pink36',   name: 'Розовый 36-пин (4x9)',   alias: 'PINK-36',       color: '#8a3560', rows: 4, cols: 9, pin_shape: 'square', lock: 'bottom' },
+  { id: 'green36',  name: 'Зелёный 36-пин (4x9)',   alias: 'GREEN-36',      color: '#1a5a2a', rows: 4, cols: 9, pin_shape: 'square', lock: 'bottom' },
+  { id: 'yellow18', name: 'Жёлтый 18-пин (3x6)',    alias: 'YELLOW-18',     color: '#7a6a00', rows: 3, cols: 6, pin_shape: 'square', lock: 'bottom' },
+
+  // ── 6-пин разные цвета ───────────────────────────────────────────
+  { id: 'black6',   name: 'Чёрный 6-пин',           alias: 'BLACK-6',       color: '#2a2a2a', rows: 2, cols: 3, pin_shape: 'square', lock: null },
+  { id: 'white6',   name: 'Белый 6-пин',             alias: 'WHITE-6',       color: '#4a5a6a', rows: 2, cols: 3, pin_shape: 'square', lock: null },
+  { id: 'white10',  name: 'Белый 10-пин (2x5)',      alias: 'WHITE-10',      color: '#4a5a6a', rows: 2, cols: 5, pin_shape: 'square', lock: 'bottom' },
+
+  // ── 14-пин ───────────────────────────────────────────────────────
+  { id: 'black14',  name: 'Чёрный 14-пин (2x7)',    alias: 'BLACK-14',      color: '#1e2a35', rows: 2, cols: 7, pin_shape: 'square', lock: 'bottom' },
+
+  // ── 8-пин разные цвета ───────────────────────────────────────────
+  { id: 'black8',   name: 'Чёрный 8-пин (2x4)',     alias: 'BLACK-8',       color: '#2a2a2a', rows: 2, cols: 4, pin_shape: 'square', lock: 'bottom' },
+  { id: 'white8',   name: 'Белый 8-пин (2x4)',       alias: 'WHITE-8',       color: '#4a5a6a', rows: 2, cols: 4, pin_shape: 'square', lock: 'bottom' },
+  { id: 'grey8',    name: 'Серый 8-пин (2x4)',       alias: 'GREY-8',        color: '#3a4a5a', rows: 2, cols: 4, pin_shape: 'square', lock: 'bottom' },
+
+  // ── 16-пин разные цвета ──────────────────────────────────────────
+  { id: 'white16',  name: 'Белый 16-пин (4x4)',      alias: 'WHITE-16',      color: '#4a5a6a', rows: 4, cols: 4, pin_shape: 'square', lock: 'bottom' },
+
+  // ── 2-пин разные цвета ───────────────────────────────────────────
+  { id: 'grey2',    name: 'Серый 2-пин',             alias: 'GREY-2',        color: '#3a4a5a', rows: 1, cols: 2, pin_shape: 'square', lock: null },
+  { id: 'white2s',  name: 'Белый 2-пин (с замком)',  alias: 'WHITE-2S',      color: '#4a5a6a', rows: 1, cols: 2, pin_shape: 'square', lock: 'bottom' },
+
+  // ── 3-пин ────────────────────────────────────────────────────────
+  { id: 'grey3',    name: 'Серый 3-пин',              alias: 'GREY-3',        color: '#3a4a5a', rows: 1, cols: 3, pin_shape: 'square', lock: null },
+
+  // ── 4-пин ────────────────────────────────────────────────────────
+  { id: 'grey4',    name: 'Серый 4-пин',              alias: 'GREY-4',        color: '#3a4a5a', rows: 1, cols: 4, pin_shape: 'square', lock: null },
+  { id: 'white4s',  name: 'Белый 4-пин (с замком)',   alias: 'WHITE-4S',      color: '#4a5a6a', rows: 1, cols: 4, pin_shape: 'square', lock: 'bottom' },
 ];
 
 // ── Wire Color Palette ───────────────────────────────────────────
@@ -86,4 +118,32 @@ export const COLORS = {
 export const WIRE_SECTIONS = [
   '0.35 мм²', '0.5 мм²', '0.75 мм²', '1.0 мм²', '1.5 мм²', '2.5 мм²',
   '4 мм²', '6 мм²', '10 мм²', '16 мм²', '25 мм²',
+
+  // ── Из схемы ПРАВАЯ 6х4 ─────────────────────────────────────────
+  // Чёрно-жёлтые (ЧЖ)
+  { id: 'bkyw1',    name: 'Чёрно-жёлтый 1-пин',      alias: 'BKYW-1',       color: '#3a3300', rows: 1, cols: 1, pin_shape: 'square', lock: null },
+  { id: 'bkyw2',    name: 'Чёрно-жёлтый 2-пин',      alias: 'BKYW-2',       color: '#3a3300', rows: 1, cols: 2, pin_shape: 'square', lock: null },
+  { id: 'bkyw3',    name: 'Чёрно-жёлтый 3-пин (1x3)', alias: 'BKYW-3',      color: '#3a3300', rows: 1, cols: 3, pin_shape: 'square', lock: null },
+
+  // Фары — 14-пин (2x7)
+  // (уже есть black14 — используем его для №110, №56)
+
+  // Связной №103 — 36-пин 6x6
+  { id: 'grey36',   name: 'Серый 36-пин (6x6)',       alias: 'GREY-36',      color: '#3a4a5a', rows: 6, cols: 6, pin_shape: 'square', lock: 'bottom' },
+
+  // АКПП №64 — 21-пин 3x7
+  { id: 'white21',  name: 'Белый 21-пин (3x7)',        alias: 'WHITE-21',     color: '#4a5a6a', rows: 3, cols: 7, pin_shape: 'square', lock: 'bottom' },
+
+  // №102 — 8-пин 4x2 чёрный (уже есть black8, rows:2 cols:4 — подходит)
+
+  // №79 мочевинная — 5-пин 1x5
+  { id: 'grey5',    name: 'Серый 5-пин (1x5)',         alias: 'GREY-5',       color: '#3a4a5a', rows: 1, cols: 5, pin_shape: 'square', lock: null },
+
+  // №88, №89 — 3-пин 1x3 (уже есть grey3, black3)
+  // №115 S — 2-пин (уже есть bkyw2 или grey2)
+  // №91 D — 2-пин любой цвет (используем grey2)
+
+  // Дополнительно: фишки из ПРАВАЯ СИЛОВАЯ которых не хватает
+  // №30/16-16 — 16-пин (уже есть black16)
+  // №7/16-10 — 10-пин (уже есть black10)
 ];
