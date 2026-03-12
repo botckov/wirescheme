@@ -77,8 +77,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 <span>
                   Ф{fc?.num ?? '?'}:{w.fromPin + 1} → Ф{tc?.num ?? '?'}:{w.toPin + 1}
                 </span>
+                {w.length > 0 && (
+                  <span style={{ marginLeft: 'auto', color: 'var(--ws-text-dim)', fontSize: 10 }}>
+                    {w.length}мм
+                  </span>
+                )}
                 {w.mark && (
-                  <span style={{ marginLeft: 'auto', color: 'var(--ws-accent)', fontSize: 10 }}>
+                  <span style={{ color: 'var(--ws-accent)', fontSize: 10, marginLeft: w.length > 0 ? 4 : 'auto' }}>
                     {w.mark}
                   </span>
                 )}
@@ -185,6 +190,18 @@ const WireProps: React.FC<WirePropsProps> = ({ wire, connectors, onUpdate, onDel
           onChange={(e) => onUpdate({ mark: e.target.value })}
           placeholder="A3"
           maxLength={12}
+        />
+      </div>
+
+      <div className="ws-prop-row">
+        <span className="ws-prop-key">Длина (мм)</span>
+        <input
+          className="ws-prop-input"
+          type="number"
+          min={0}
+          value={wire.length}
+          onChange={(e) => onUpdate({ length: Number(e.target.value) })}
+          placeholder="370"
         />
       </div>
 

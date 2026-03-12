@@ -1,3 +1,4 @@
+================================================
 import React, { useReducer, useState, useCallback, useEffect, useRef } from 'react';
 import { appReducer, initialState } from './hooks/useAppReducer';
 import type { ConnectingState, Connector, Wire, HarnessNode, HarnessEdge } from './types';
@@ -135,6 +136,7 @@ export default function App() {
       mark: '',
       section: WIRE_SECTIONS[2],
       signal: '',
+      length: 0,
     };
     dispatch({ type: 'ADD_WIRE', payload: wire });
     setConnecting(null); setPendingTarget(null); setColorPickerPos(null);
