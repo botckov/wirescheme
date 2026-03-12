@@ -21,7 +21,8 @@ jobs:
       - name: Install & Build
         run: |
           npm install
-          npm run build
+          npm ci
+          npx vite build
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
