@@ -28,7 +28,7 @@ const TerminalNode: React.FC<{
   onPointerDown: (e: React.PointerEvent, connId: string) => void;
   onPinClick: (connId: string, pinIdx: number) => void;
 }> = ({ connector, wires, isSelected, connecting, onPointerDown, onPinClick }) => {
-  const R = 38; // радиус клеммы
+  const R = 38;
   const pin = connector.pins[0];
   const isOccupied = pin?.state === 'occupied';
   const isActive = pin?.state === 'active';
@@ -50,7 +50,6 @@ const TerminalNode: React.FC<{
         </filter>
       </defs>
 
-      {/* Внешний круг — корпус клеммы */}
       <circle
         r={R}
         fill="#111318"
@@ -59,7 +58,6 @@ const TerminalNode: React.FC<{
         filter={`url(#tshadow_${connector.id})`}
       />
 
-      {/* Внутренний круг — контактное кольцо */}
       <circle
         r={R * 0.62}
         fill="#0a0c10"
@@ -69,7 +67,6 @@ const TerminalNode: React.FC<{
         style={{ cursor: 'crosshair' }}
       />
 
-      {/* Glow при active/available */}
       {(isActive || isAvailable) && (
         <circle r={R * 0.62} fill="none"
           stroke={isActive ? '#3eb8ff' : '#3ddc84'}
@@ -78,7 +75,6 @@ const TerminalNode: React.FC<{
         />
       )}
 
-      {/* Номер кольца */}
       <text
         x={0} y={connector.label ? -5 : 0}
         textAnchor="middle"
@@ -92,7 +88,6 @@ const TerminalNode: React.FC<{
         {connector.num}
       </text>
 
-      {/* Тип клеммы (например 16-8) */}
       {connector.label && (
         <text
           x={0} y={9}
@@ -116,7 +111,6 @@ const NodeComponent: React.FC<NodeProps> = ({
 }) => {
   const def = getConnDef(connector.libId);
 
-  // Клемма — отдельный визуал
   if (connector.libId === 'terminal') {
     return (
       <TerminalNode
@@ -151,6 +145,15 @@ const NodeComponent: React.FC<NodeProps> = ({
   function shouldGlow(pinIdx: number): boolean {
     const pin = connector.pins[pinIdx];
     return pin?.state === 'active' || pin?.state === 'available';
+  }
+
+  // Получить данные провода для пина
+  function getWireData(pinIdx: number): { mark: string; length: number } | null {
+    const pin = connector.pins[pinIdx];
+    if (!pin || pin.state !== 'occupied' || !pin.wireId) return null;
+    const wire = wires.find((w) => w.id === pin.wireId);
+    if (!wire) return null;
+    return { mark: wire.mark, length: wire.length };
   }
 
   return (
@@ -205,7 +208,11 @@ const NodeComponent: React.FC<NodeProps> = ({
         const glow = shouldGlow(pinIdx);
         const pin = connector.pins[pinIdx];
         const isOccupied = pin?.state === 'occupied';
-        const fontSize = Math.max(7, pinSize * 0.36);
+        const wireData = getWireData(pinIdx);
+
+        // Размеры шрифтов адаптивно под размер пина
+        const markFontSize = Math.max(8, pinSize * 0.28);
+        const lengthFontSize = Math.max(7, pinSize * 0.22);
 
         return (
           <g key={pinIdx}
@@ -217,12 +224,47 @@ const NodeComponent: React.FC<NodeProps> = ({
             )}
             <rect x={px-pinSize/2} y={py-pinSize/2} width={pinSize} height={pinSize}
               rx={2} fill={color} />
-            <text x={px} y={py} textAnchor="middle" dominantBaseline="middle"
-              fontSize={fontSize} fontFamily="monospace"
-              fill={isOccupied ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.25)'}
-              style={{ pointerEvents: 'none', userSelect: 'none' }}>
-              {pinIdx + 1}
-            </text>
+
+            {/* Если пин занят — показываем маркировку провода и длину */}
+            {isOccupied && wireData ? (
+              <>
+                {/* Маркировка провода (номер) — верхняя строка */}
+                {wireData.mark && (
+                  <text
+                    x={px} y={py - pinSize * 0.1}
+                    textAnchor="middle" dominantBaseline="auto"
+                    fontSize={markFontSize}
+                    fontFamily="'JetBrains Mono', monospace"
+                    fontWeight="700"
+                    fill="rgba(255,255,255,0.92)"
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                  >
+                    {wireData.mark}
+                  </text>
+                )}
+                {/* Длина провода — нижняя строка */}
+                {wireData.length > 0 && (
+                  <text
+                    x={px} y={py + pinSize * 0.15}
+                    textAnchor="middle" dominantBaseline="hanging"
+                    fontSize={lengthFontSize}
+                    fontFamily="'JetBrains Mono', monospace"
+                    fill="rgba(200,212,240,0.7)"
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                  >
+                    {wireData.length}
+                  </text>
+                )}
+              </>
+            ) : (
+              /* Если пин свободен — показываем номер пина как раньше */
+              <text x={px} y={py} textAnchor="middle" dominantBaseline="middle"
+                fontSize={Math.max(7, pinSize * 0.36)} fontFamily="monospace"
+                fill={isOccupied ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.25)'}
+                style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                {pinIdx + 1}
+              </text>
+            )}
           </g>
         );
       })}
