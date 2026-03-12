@@ -27,6 +27,11 @@ export default function App() {
   // Harness connecting state
   const [harnessConnectingFrom, setHarnessConnectingFrom] = useState<string | null>(null);
 
+  // Диалог ввода номера при добавлении фишки
+  const [pendingConn, setPendingConn] = useState<{ libId: string; worldX?: number; worldY?: number } | null>(null);
+  const [pendingNum, setPendingNum] = useState('');
+  const numInputRef = useRef<HTMLInputElement>(null);
+
   // Resizable splitter
   const [topHeight, setTopHeight] = useState<number>(0); // 0 = auto (60%)
   const splitterRef = useRef<boolean>(false);
@@ -51,6 +56,7 @@ export default function App() {
         setPendingTarget(null);
         setColorPickerPos(null);
         setHarnessConnectingFrom(null);
+        setPendingConn(null);
         resetPinStates();
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey) {
@@ -147,30 +153,41 @@ export default function App() {
     resetPinStates();
   }, []); // eslint-disable-line
 
-  // ── Add connector ─────────────────────────────────────────────
+  // ── Add connector — открывает диалог ввода номера ────────────
   const handleAddConnector = useCallback(
     (libId: string, worldX?: number, worldY?: number) => {
-      const def = getConnDef(libId);
-      const num = state.connectorCounter + 1;
-      const nc: Connector = {
-        id: uid('c'),
-        libId,
-        x: worldX ?? (800 / 2 - state.viewport.x) / state.viewport.scale,
-        y: worldY ?? (600 / 2 - state.viewport.y) / state.viewport.scale,
-        rotation: 0,
-        num,
-        label: '',
-        pins: Array.from({ length: def.rows * def.cols }, (_, i) => ({
-          id: i,
-          state: 'free',
-          wireId: null,
-        })),
-      };
-      dispatch({ type: 'ADD_CONNECTOR', payload: nc });
-      toast(`Добавлен Ф${num}: ${def.name}`);
+      setPendingConn({ libId, worldX, worldY });
+      setPendingNum('');
+      setTimeout(() => numInputRef.current?.focus(), 50);
     },
-    [state.connectorCounter, state.viewport]
+    []
   );
+
+  const handleConfirmAdd = useCallback(() => {
+    if (!pendingConn) return;
+    const num = parseInt(pendingNum, 10);
+    if (isNaN(num) || num <= 0) { toast('⚠ Введите номер фишки'); return; }
+    const { libId, worldX, worldY } = pendingConn;
+    const def = getConnDef(libId);
+    const nc: Connector = {
+      id: uid('c'),
+      libId,
+      x: worldX ?? (800 / 2 - state.viewport.x) / state.viewport.scale,
+      y: worldY ?? (600 / 2 - state.viewport.y) / state.viewport.scale,
+      rotation: 0,
+      num,
+      label: '',
+      pins: Array.from({ length: def.rows * def.cols }, (_, i) => ({
+        id: i,
+        state: 'free',
+        wireId: null,
+      })),
+    };
+    dispatch({ type: 'ADD_CONNECTOR', payload: nc });
+    setPendingConn(null);
+    setPendingNum('');
+    toast(`Добавлена фишка №${num}: ${def.name}`);
+  }, [pendingConn, pendingNum, state.viewport]);
 
   // ── Connector click → highlight in harness ────────────────────
   const handleSelectConnector = useCallback((id: string | null) => {
@@ -562,6 +579,36 @@ export default function App() {
           onConfirm={handleConfirmWire}
           onCancel={handleCancelColorPicker}
         />
+      )}
+
+      {/* ── Диалог ввода номера фишки ─────────────────────────── */}
+      {pendingConn && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}
+          onClick={() => setPendingConn(null)}
+        >
+          <div className="ws-popup" style={{ width: 260 }} onClick={(e) => e.stopPropagation()}>
+            <div className="ws-popup-title">Номер фишки в схеме</div>
+            <div style={{ fontSize: 11, color: 'var(--ws-text-dim)', marginBottom: 10 }}>
+              {(() => { try { return getConnDef(pendingConn.libId).name; } catch { return pendingConn.libId; } })()}
+            </div>
+            <input
+              ref={numInputRef}
+              className="ws-prop-input"
+              type="number"
+              min={1}
+              placeholder="например: 108"
+              value={pendingNum}
+              onChange={(e) => setPendingNum(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmAdd(); if (e.key === 'Escape') setPendingConn(null); }}
+              style={{ width: '100%', marginBottom: 10, fontSize: 15, padding: '6px 10px' }}
+            />
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="ws-btn-primary" onClick={handleConfirmAdd} style={{ flex: 1 }}>Добавить</button>
+              <button className="ws-tbtn" onClick={() => setPendingConn(null)}>✕</button>
+            </div>
+          </div>
+        </div>
       )}
 
       <Toast message={toastMsg} onClear={() => setToastMsg(null)} />
