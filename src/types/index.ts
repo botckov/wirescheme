@@ -158,7 +158,6 @@ export type AppAction =
   | { type: 'CLEAR_ALL' }
   | { type: 'LOAD_PROJECT'; payload: { connectors: Connector[]; wires: Wire[]; harnessNodes?: HarnessNode[]; harnessEdges?: HarnessEdge[] } }
   | { type: 'UPDATE_PIN_STATE'; payload: { connId: string; pinIdx: number; state: PinState; wireId?: string | null } }
-  // Harness actions
   | { type: 'ADD_HARNESS_NODE'; payload: HarnessNode }
   | { type: 'MOVE_HARNESS_NODE'; payload: { id: string; x: number; y: number } }
   | { type: 'UPDATE_HARNESS_NODE'; payload: Partial<HarnessNode> & { id: string } }
@@ -169,7 +168,7 @@ export type AppAction =
   | { type: 'SELECT_HARNESS_NODE'; payload: string | null }
   | { type: 'SELECT_HARNESS_EDGE'; payload: string | null }
   | { type: 'SET_HARNESS_VIEWPORT'; payload: Partial<Viewport> }
-  | { type: 'SET_HIGHLIGHTED_CONNECTOR'; payload: string | null };
+  | { type: 'SET_HIGHLIGHTED_CONNECTOR'; payload: string | null }
   | { type: 'RESET_PIN_STATES' }
   | { type: 'SET_PINS_AVAILABLE'; payload: { excludeConnId: string } }
-  | { type: 'SET_PIN_ACTIVE'; payload: { connId: string; pinIdx: number } }
+  | { type: 'SET_PIN_ACTIVE'; payload: { connId: string; pinIdx: number } };
