@@ -13,6 +13,7 @@ interface CanvasProps {
   selectedConnId: string | null;
   selectedWireId: string | null;
   connecting: ConnectingState | null;
+  highlightedPinIds: Array<{ connId: string; pinIdx: number }>;
   onViewportChange: (vp: Partial<Viewport>) => void;
   onMoveConnector: (id: string, x: number, y: number) => void;
   onSelectConnector: (id: string | null) => void;
@@ -25,14 +26,13 @@ const GRID_SIZE = 24;
 
 const Canvas: React.FC<CanvasProps> = ({
   connectors, wires, viewport, mode, wiresVisible,
-  selectedConnId, selectedWireId, connecting,
+  selectedConnId, selectedWireId, connecting, highlightedPinIds,
   onViewportChange, onMoveConnector, onSelectConnector, onSelectWire, onPinClick, onDrop,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [size, setSize] = useState({ w: 1200, h: 800 });
   const [mouseWorld, setMouseWorld] = useState<Point | null>(null);
 
-  // Drag state (use ref to avoid stale closures in pointer handlers)
   const dragRef = useRef<{ connId: string; offX: number; offY: number } | null>(null);
   const panRef = useRef<{ startX: number; startY: number; startVX: number; startVY: number } | null>(null);
 
@@ -102,15 +102,15 @@ const Canvas: React.FC<CanvasProps> = ({
 
       const world = screenToWorld(e.clientX, e.clientY);
 
-      // If in connecting mode — handled by pin clicks only
-      if (connecting) return;
-
-      // Check pin hit first (small radius)
+      // Check pin hit first (small radius) — always, even in connecting mode
       const pinHit = hitTestPin(world.x, world.y, connectors);
       if (pinHit) {
         onPinClick(pinHit.connId, pinHit.pinIdx);
         return;
       }
+
+      // If in connecting mode — only pin clicks are handled
+      if (connecting) return;
 
       // Check connector hit
       const conn = hitTestConnector(world.x, world.y, connectors);
@@ -255,8 +255,9 @@ const Canvas: React.FC<CanvasProps> = ({
             wires={wires}
             isSelected={selectedConnId === conn.id}
             connecting={connecting}
+            highlightedPinIds={highlightedPinIds}
             onPointerDown={(e, connId) => {
-              if (connecting) return; // handled by pin click
+              if (connecting) return;
               e.stopPropagation();
               const world = screenToWorld(e.clientX, e.clientY);
               const c = connectors.find((x) => x.id === connId)!;

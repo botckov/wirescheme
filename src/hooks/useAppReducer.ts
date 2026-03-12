@@ -30,6 +30,7 @@ export const initialState: AppState = {
   selectedHarnessEdgeId: null,
   harnessViewport: { x: 40, y: 40, scale: 1 },
   highlightedConnectorId: null,
+  highlightedPinIds: [],
 };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
@@ -94,7 +95,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         pins: Array.from({ length: def.rows * def.cols }, (_, i) => ({
           id: i,
           state: 'free',
-          wireId: null,
+          wireIds: [],
         })),
       };
       return {
@@ -122,9 +123,15 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           if (c.id !== otherId) return c;
           return {
             ...c,
-            pins: c.pins.map((p) =>
-              p.id === otherPin ? { ...p, state: 'free', wireId: null } : p
-            ),
+            pins: c.pins.map((p) => {
+              if (p.id !== otherPin) return p;
+              const newWireIds = p.wireIds.filter((id) => id !== wid);
+              return {
+                ...p,
+                wireIds: newWireIds,
+                state: newWireIds.length === 0 ? 'free' as const : 'occupied' as const,
+              };
+            }),
           };
         });
       });
@@ -141,6 +148,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         harnessNodes: updatedHarnessNodes,
         selectedConnId: state.selectedConnId === action.payload ? null : state.selectedConnId,
         selectedWireId: affectedWires.includes(state.selectedWireId ?? '') ? null : state.selectedWireId,
+        highlightedPinIds: [],
       };
     }
 
@@ -154,7 +162,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           return {
             ...c,
             pins: c.pins.map((p) =>
-              p.id === wire.fromPin ? { ...p, state: 'occupied' as const, wireId: wire.id } : p
+              p.id === wire.fromPin
+                ? {
+                    ...p,
+                    state: 'occupied' as const,
+                    wireIds: [...(p.wireIds ?? []).filter((id) => id !== wire.id), wire.id],
+                  }
+                : p
             ),
           };
         }
@@ -162,7 +176,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           return {
             ...c,
             pins: c.pins.map((p) =>
-              p.id === wire.toPin ? { ...p, state: 'occupied' as const, wireId: wire.id } : p
+              p.id === wire.toPin
+                ? {
+                    ...p,
+                    state: 'occupied' as const,
+                    wireIds: [...(p.wireIds ?? []).filter((id) => id !== wire.id), wire.id],
+                  }
+                : p
             ),
           };
         }
@@ -187,6 +207,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         wireCounter: state.wireCounter + 1,
         selectedWireId: wire.id,
         selectedConnId: null,
+        highlightedPinIds: [],
       };
     }
 
@@ -208,17 +229,29 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         if (c.id === wire.fromConn) {
           return {
             ...c,
-            pins: c.pins.map((p) =>
-              p.id === wire.fromPin ? { ...p, state: 'free' as const, wireId: null } : p
-            ),
+            pins: c.pins.map((p) => {
+              if (p.id !== wire.fromPin) return p;
+              const newWireIds = (p.wireIds ?? []).filter((id) => id !== wire.id);
+              return {
+                ...p,
+                wireIds: newWireIds,
+                state: newWireIds.length === 0 ? 'free' as const : 'occupied' as const,
+              };
+            }),
           };
         }
         if (c.id === wire.toConn) {
           return {
             ...c,
-            pins: c.pins.map((p) =>
-              p.id === wire.toPin ? { ...p, state: 'free' as const, wireId: null } : p
-            ),
+            pins: c.pins.map((p) => {
+              if (p.id !== wire.toPin) return p;
+              const newWireIds = (p.wireIds ?? []).filter((id) => id !== wire.id);
+              return {
+                ...p,
+                wireIds: newWireIds,
+                state: newWireIds.length === 0 ? 'free' as const : 'occupied' as const,
+              };
+            }),
           };
         }
         return c;
@@ -230,15 +263,26 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         wires: state.wires.filter((w) => w.id !== action.payload),
         connectors,
         selectedWireId: state.selectedWireId === action.payload ? null : state.selectedWireId,
+        highlightedPinIds: [],
       };
     }
 
     // ── Selection ──────────────────────────────────────────────────
     case 'SELECT_CONNECTOR':
-      return { ...state, selectedConnId: action.payload, selectedWireId: null };
+      return {
+        ...state,
+        selectedConnId: action.payload,
+        selectedWireId: null,
+        highlightedPinIds: [],
+      };
 
     case 'SELECT_WIRE':
-      return { ...state, selectedWireId: action.payload, selectedConnId: null };
+      return {
+        ...state,
+        selectedWireId: action.payload,
+        selectedConnId: null,
+        highlightedPinIds: [],
+      };
 
     // ── Mode & Viewport ────────────────────────────────────────────
     case 'SET_MODE':
@@ -258,21 +302,23 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           if (c.id !== action.payload.connId) return c;
           return {
             ...c,
-            pins: c.pins.map((p) =>
-              p.id === action.payload.pinIdx
-                ? {
-                    ...p,
-                    state: action.payload.state,
-                    wireId: action.payload.wireId !== undefined ? action.payload.wireId : p.wireId,
-                  }
-                : p
-            ),
+            pins: c.pins.map((p) => {
+              if (p.id !== action.payload.pinIdx) return p;
+              const wireIds = p.wireIds ?? [];
+              const newWireIds =
+                action.payload.wireId !== undefined
+                  ? action.payload.wireId === null
+                    ? wireIds
+                    : [...wireIds.filter((id) => id !== action.payload.wireId), action.payload.wireId]
+                  : wireIds;
+              return { ...p, state: action.payload.state, wireIds: newWireIds };
+            }),
           };
         }),
       };
     }
 
-    // НОВЫЙ action — сбросить все active/available в free одним вызовом
+    // Сбросить все active/available в free одним вызовом
     case 'RESET_PIN_STATES': {
       return {
         ...state,
@@ -284,10 +330,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
               : p
           ),
         })),
+        highlightedPinIds: [],
       };
     }
 
-    // НОВЫЙ action — установить все свободные пины других фишек в available
+    // Установить все свободные пины других фишек в available
     case 'SET_PINS_AVAILABLE': {
       return {
         ...state,
@@ -295,15 +342,18 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           if (c.id === action.payload.excludeConnId) return c;
           return {
             ...c,
+            // occupied пины тоже становятся available — можно соединять с уже занятыми
             pins: c.pins.map((p) =>
-              p.state === 'free' ? { ...p, state: 'available' as const } : p
+              p.state === 'free' || p.state === 'occupied'
+                ? { ...p, state: 'available' as const }
+                : p
             ),
           };
         }),
       };
     }
 
-    // НОВЫЙ action — установить один пин в active
+    // Установить один пин в active
     case 'SET_PIN_ACTIVE': {
       return {
         ...state,
@@ -318,6 +368,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
             ),
           };
         }),
+      };
+    }
+
+    // НОВОЕ: подсветить связанные пины при клике на занятый пин
+    case 'SET_HIGHLIGHTED_PINS': {
+      return {
+        ...state,
+        highlightedPinIds: action.payload,
       };
     }
 
@@ -338,6 +396,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         selectedWireId: null,
         selectedHarnessNodeId: null,
         selectedHarnessEdgeId: null,
+        highlightedPinIds: [],
       };
     }
 
@@ -354,16 +413,25 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         selectedWireId: null,
         selectedHarnessNodeId: null,
         selectedHarnessEdgeId: null,
+        highlightedPinIds: [],
       };
     }
 
     case 'LOAD_PROJECT': {
       const history = [...state.history, cloneState(state)].slice(-MAX_HISTORY);
       const maxNum = Math.max(...action.payload.connectors.map((c) => c.num ?? 0), 0);
+      // Миграция старых данных: wireId → wireIds
+      const connectors = action.payload.connectors.map((c) => ({
+        ...c,
+        pins: c.pins.map((p: any) => ({
+          ...p,
+          wireIds: p.wireIds ?? (p.wireId ? [p.wireId] : []),
+        })),
+      }));
       return {
         ...state,
         history,
-        connectors: action.payload.connectors,
+        connectors,
         wires: action.payload.wires,
         harnessNodes: action.payload.harnessNodes ?? [],
         harnessEdges: action.payload.harnessEdges ?? [],
@@ -372,6 +440,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         selectedWireId: null,
         selectedHarnessNodeId: null,
         selectedHarnessEdgeId: null,
+        highlightedPinIds: [],
       };
     }
 

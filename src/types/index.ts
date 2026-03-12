@@ -23,7 +23,7 @@ export interface ConnectorDef {
 export interface Pin {
   id: number;
   state: PinState;
-  wireId: string | null;
+  wireIds: string[];   // ИЗМЕНЕНО: массив вместо одного wireId
 }
 
 // ── Placed connector instance on the canvas ─────────────────────
@@ -135,6 +135,7 @@ export interface AppState {
   selectedHarnessEdgeId: string | null;
   harnessViewport: Viewport;
   highlightedConnectorId: string | null; // подсветка верх ↔ низ
+  highlightedPinIds: Array<{ connId: string; pinIdx: number }>; // НОВОЕ: подсветка связанных пинов
 }
 
 // ── Action types for useReducer ──────────────────────────────────
@@ -171,4 +172,5 @@ export type AppAction =
   | { type: 'SET_HIGHLIGHTED_CONNECTOR'; payload: string | null }
   | { type: 'RESET_PIN_STATES' }
   | { type: 'SET_PINS_AVAILABLE'; payload: { excludeConnId: string } }
-  | { type: 'SET_PIN_ACTIVE'; payload: { connId: string; pinIdx: number } };
+  | { type: 'SET_PIN_ACTIVE'; payload: { connId: string; pinIdx: number } }
+  | { type: 'SET_HIGHLIGHTED_PINS'; payload: Array<{ connId: string; pinIdx: number }> }; // НОВОЕ

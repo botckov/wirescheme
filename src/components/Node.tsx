@@ -8,6 +8,7 @@ interface NodeProps {
   wires: Wire[];
   isSelected: boolean;
   connecting: ConnectingState | null;
+  highlightedPinIds: Array<{ connId: string; pinIdx: number }>;
   onPointerDown: (e: React.PointerEvent, connId: string) => void;
   onPinClick: (connId: string, pinIdx: number) => void;
 }
@@ -28,16 +29,26 @@ const TerminalNode: React.FC<{
   wires: Wire[];
   isSelected: boolean;
   connecting: ConnectingState | null;
+  highlightedPinIds: Array<{ connId: string; pinIdx: number }>;
   onPointerDown: (e: React.PointerEvent, connId: string) => void;
   onPinClick: (connId: string, pinIdx: number) => void;
-}> = ({ connector, wires, isSelected, onPointerDown, onPinClick }) => {
+}> = ({ connector, wires, isSelected, onPointerDown, onPinClick, highlightedPinIds }) => {
   const R = 38;
   const pin = connector.pins[0];
   const isOccupied  = pin?.state === 'occupied';
   const isActive    = pin?.state === 'active';
   const isAvailable = pin?.state === 'available';
-  const wire = isOccupied && pin.wireId ? wires.find((w) => w.id === pin.wireId) : null;
-  const ringColor = wire ? wire.color : isActive ? '#3eb8ff' : isAvailable ? '#3ddc84' : '#888';
+
+  // Для занятого пина берём последний провод для цвета кольца
+  const wireIds = pin?.wireIds ?? [];
+  const lastWire = wireIds.length > 0 ? wires.find((w) => w.id === wireIds[wireIds.length - 1]) : null;
+  const wireCount = wireIds.length;
+
+  const ringColor = lastWire ? lastWire.color : isActive ? '#3eb8ff' : isAvailable ? '#3ddc84' : '#888';
+
+  const isHighlighted = highlightedPinIds.some(
+    (hp) => hp.connId === connector.id && hp.pinIdx === 0
+  );
 
   return (
     <g transform={`translate(${connector.x},${connector.y})`} style={{ cursor: 'grab' }}
@@ -45,18 +56,27 @@ const TerminalNode: React.FC<{
       <defs>
         <filter id={`tshadow_${connector.id}`} x="-40%" y="-40%" width="180%" height="180%">
           <feDropShadow dx="0" dy="2" stdDeviation={isSelected ? 8 : 3}
-            floodColor={isSelected ? '#3eb8ff' : '#000'} floodOpacity={isSelected ? 0.8 : 0.5} />
+            floodColor={isHighlighted ? '#f0c040' : isSelected ? '#3eb8ff' : '#000'}
+            floodOpacity={isSelected || isHighlighted ? 0.8 : 0.5} />
         </filter>
       </defs>
-      <circle r={R} fill="#111318" stroke={isSelected ? '#3eb8ff' : ringColor}
-        strokeWidth={isSelected ? 3 : 2.5} filter={`url(#tshadow_${connector.id})`} />
-      <circle r={R * 0.62} fill="#0a0c10" stroke={ringColor}
+      <circle r={R} fill="#111318"
+        stroke={isHighlighted ? '#f0c040' : isSelected ? '#3eb8ff' : ringColor}
+        strokeWidth={isSelected || isHighlighted ? 3 : 2.5}
+        filter={`url(#tshadow_${connector.id})`} />
+      <circle r={R * 0.62} fill="#0a0c10"
+        stroke={isHighlighted ? '#f0c040' : ringColor}
         strokeWidth={isOccupied || isActive || isAvailable ? 3 : 1.5}
         onClick={(e) => { e.stopPropagation(); onPinClick(connector.id, 0); }}
         style={{ cursor: 'crosshair' }} />
       {(isActive || isAvailable) && (
         <circle r={R * 0.62} fill="none"
           stroke={isActive ? '#3eb8ff' : '#3ddc84'} strokeWidth={6} opacity={0.3}
+          style={{ pointerEvents: 'none' }} />
+      )}
+      {isHighlighted && (
+        <circle r={R + 6} fill="none"
+          stroke="#f0c040" strokeWidth={2} opacity={0.6} strokeDasharray="4 3"
           style={{ pointerEvents: 'none' }} />
       )}
       <text x={0} y={connector.label ? -5 : 0} textAnchor="middle"
@@ -73,19 +93,32 @@ const TerminalNode: React.FC<{
           {connector.label}
         </text>
       )}
+      {/* Бейдж с количеством проводов */}
+      {wireCount > 1 && (
+        <g style={{ pointerEvents: 'none' }}>
+          <circle cx={R * 0.72} cy={-R * 0.72} r={9} fill="#f0c040" />
+          <text x={R * 0.72} y={-R * 0.72}
+            textAnchor="middle" dominantBaseline="middle"
+            fontSize={9} fontFamily="'JetBrains Mono', monospace" fontWeight="700"
+            fill="#0a0c10">
+            {wireCount}
+          </text>
+        </g>
+      )}
     </g>
   );
 };
 
 // ── Main connector ────────────────────────────────────────────────
 const NodeComponent: React.FC<NodeProps> = ({
-  connector, wires, isSelected, connecting, onPointerDown, onPinClick,
+  connector, wires, isSelected, connecting, highlightedPinIds, onPointerDown, onPinClick,
 }) => {
   const def = getConnDef(connector.libId);
 
   if (connector.libId === 'terminal') {
     return <TerminalNode connector={connector} wires={wires} isSelected={isSelected}
-      connecting={connecting} onPointerDown={onPointerDown} onPinClick={onPinClick} />;
+      connecting={connecting} highlightedPinIds={highlightedPinIds}
+      onPointerDown={onPointerDown} onPinClick={onPinClick} />;
   }
 
   const { w, h } = connSize(connector);
@@ -99,10 +132,12 @@ const NodeComponent: React.FC<NodeProps> = ({
   const gridX = -w / 2 + PIN_OUTER_PAD;
   const gridY = -h / 2 + PIN_OUTER_PAD;
 
-  function getWireForPin(pinIdx: number): Wire | null {
+  // Получаем последний (и все) провода для пина
+  function getWiresForPin(pinIdx: number): Wire[] {
     const pin = connector.pins[pinIdx];
-    if (!pin || pin.state !== 'occupied' || !pin.wireId) return null;
-    return wires.find((wr) => wr.id === pin.wireId) ?? null;
+    if (!pin || pin.state !== 'occupied') return [];
+    const wireIds = pin.wireIds ?? [];
+    return wireIds.map((id) => wires.find((w) => w.id === id)).filter(Boolean) as Wire[];
   }
 
   return (
@@ -151,18 +186,27 @@ const NodeComponent: React.FC<NodeProps> = ({
         const py = gridY + row * pinH;
 
         const pin = connector.pins[pinIdx];
-        const wire = getWireForPin(pinIdx);
+        const pinWires = getWiresForPin(pinIdx);
+        const lastWire = pinWires[pinWires.length - 1] ?? null;
+        const wireCount = pinWires.length;
         const state: string = pin?.state ?? 'free';
         const isOccupied  = state === 'occupied' || state === 'pair';
         const isActive    = state === 'active';
         const isAvailable = state === 'available';
 
+        // Подсвечен ли этот пин
+        const isHighlighted = highlightedPinIds.some(
+          (hp) => hp.connId === connector.id && hp.pinIdx === pinIdx
+        );
+
         const bgColor = (isOccupied && connecting)
           ? '#3a1010'
-          : getPinBg(state, wire?.color);
+          : isHighlighted
+          ? '#2a2000'
+          : getPinBg(state, lastWire?.color);
 
-        const mark   = wire?.mark   ?? '';
-        const length = wire?.length ?? 0;
+        const mark   = lastWire?.mark   ?? '';
+        const length = lastWire?.length ?? 0;
         const hasMark   = mark.length > 0;
         const hasLength = length > 0;
 
@@ -171,16 +215,26 @@ const NodeComponent: React.FC<NodeProps> = ({
         const idxSize  = Math.max(6,  Math.min(pinW * 0.28, pinH * 0.28, 12));
 
         const borderStroke =
-          isActive      ? '#3eb8ff' :
-          isAvailable   ? '#3ddc84' :
-          isOccupied    ? 'rgba(255,255,255,0.10)' :
-                          'rgba(255,255,255,0.05)';
+          isHighlighted   ? '#f0c040' :
+          isActive        ? '#3eb8ff' :
+          isAvailable     ? '#3ddc84' :
+          isOccupied      ? 'rgba(255,255,255,0.10)' :
+                            'rgba(255,255,255,0.05)';
+
+        const borderWidth = isHighlighted ? 2 : (isActive || isAvailable ? 1.5 : 0.5);
 
         return (
           <g key={pinIdx}
             onClick={(e) => { e.stopPropagation(); onPinClick(connector.id, pinIdx); }}
             style={{ cursor: 'crosshair' }}
           >
+            {/* Glow для подсвеченного пина */}
+            {isHighlighted && (
+              <rect x={px} y={py} width={pinW} height={pinH}
+                rx={CORNER} fill="#f0c040" opacity={0.18}
+                style={{ pointerEvents: 'none' }} />
+            )}
+
             {(isActive || isAvailable) && (
               <rect x={px + 1} y={py + 1} width={pinW - 2} height={pinH - 2}
                 rx={CORNER} fill={isActive ? '#3eb8ff' : '#3ddc84'} opacity={0.15}
@@ -193,10 +247,27 @@ const NodeComponent: React.FC<NodeProps> = ({
               rx={CORNER}
               fill={bgColor}
               stroke={borderStroke}
-              strokeWidth={isActive || isAvailable ? 1.5 : 0.5}
+              strokeWidth={borderWidth}
             />
 
-            {isOccupied && !connecting && (hasMark || hasLength) ? (
+            {/* Многоцветная полоска при нескольких проводах */}
+            {wireCount > 1 && (
+              <g style={{ pointerEvents: 'none' }}>
+                {pinWires.map((pw, wi) => (
+                  <rect
+                    key={pw.id}
+                    x={px + 1 + (wi * (pinW - 2)) / wireCount}
+                    y={py + pinH - 5}
+                    width={(pinW - 2) / wireCount}
+                    height={4}
+                    fill={pw.color}
+                    rx={0}
+                  />
+                ))}
+              </g>
+            )}
+
+            {isOccupied && !connecting && (hasMark || hasLength) && wireCount <= 1 ? (
               <>
                 {hasMark && (
                   <text
@@ -228,7 +299,8 @@ const NodeComponent: React.FC<NodeProps> = ({
               </>
             ) : (
               <text
-                x={px + pinW / 2} y={py + pinH / 2}
+                x={px + pinW / 2}
+                y={wireCount > 1 ? py + pinH / 2 - 2 : py + pinH / 2}
                 textAnchor="middle" dominantBaseline="middle"
                 fontSize={idxSize} fontFamily="monospace"
                 fill={isOccupied ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.18)'}
@@ -236,6 +308,27 @@ const NodeComponent: React.FC<NodeProps> = ({
               >
                 {pinIdx + 1}
               </text>
+            )}
+
+            {/* Бейдж с количеством проводов */}
+            {wireCount > 1 && (
+              <g style={{ pointerEvents: 'none' }}>
+                <circle
+                  cx={px + pinW - 7}
+                  cy={py + 7}
+                  r={6}
+                  fill="#f0c040"
+                />
+                <text
+                  x={px + pinW - 7}
+                  y={py + 7}
+                  textAnchor="middle" dominantBaseline="middle"
+                  fontSize={7} fontFamily="'JetBrains Mono', monospace" fontWeight="700"
+                  fill="#0a0c10"
+                >
+                  {wireCount}
+                </text>
+              </g>
             )}
           </g>
         );

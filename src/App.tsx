@@ -85,30 +85,78 @@ export default function App() {
       if (!pin) return;
 
       if (!connecting) {
-        // Начало соединения
-        if (pin.state === 'occupied') { toast('⚠ Пин уже занят'); return; }
+        // ── Клик на занятый пин без режима соединения → подсветить связанные пины ──
+        if (pin.state === 'occupied') {
+          const wireIds = pin.wireIds ?? [];
 
-        // Один dispatch: активируем пин
+          // Собираем все пины, соединённые с этим пином через общие провода
+          const relatedPins: Array<{ connId: string; pinIdx: number }> = [];
+
+          // Добавляем сам кликнутый пин
+          relatedPins.push({ connId, pinIdx });
+
+          wireIds.forEach((wid) => {
+            const wire = state.wires.find((w) => w.id === wid);
+            if (!wire) return;
+            // Добавляем противоположный конец провода
+            if (wire.fromConn === connId && wire.fromPin === pinIdx) {
+              relatedPins.push({ connId: wire.toConn, pinIdx: wire.toPin });
+            } else if (wire.toConn === connId && wire.toPin === pinIdx) {
+              relatedPins.push({ connId: wire.fromConn, pinIdx: wire.fromPin });
+            }
+          });
+
+          // Если уже подсвечены те же пины — снимаем подсветку
+          const alreadyHighlighted =
+            state.highlightedPinIds.length === relatedPins.length &&
+            relatedPins.every((rp) =>
+              state.highlightedPinIds.some((hp) => hp.connId === rp.connId && hp.pinIdx === rp.pinIdx)
+            );
+
+          if (alreadyHighlighted) {
+            dispatch({ type: 'SET_HIGHLIGHTED_PINS', payload: [] });
+          } else {
+            dispatch({ type: 'SET_HIGHLIGHTED_PINS', payload: relatedPins });
+            const wireCount = wireIds.length;
+            toast(`🔗 Пин соединён с ${wireCount} ${wireCount === 1 ? 'проводом' : 'проводами'}`);
+          }
+          return;
+        }
+
+        // Начало нового соединения (свободный пин)
         dispatch({ type: 'SET_PIN_ACTIVE', payload: { connId, pinIdx } });
-        // Один dispatch: все свободные пины других фишек — available
         dispatch({ type: 'SET_PINS_AVAILABLE', payload: { excludeConnId: connId } });
-
         setConnecting({ connId, pinIdx });
         toast('Выберите второй пин для соединения');
       } else {
-        // Завершение соединения
+        // ── Завершение соединения ──
         if (connId === connecting.connId) {
           dispatch({ type: 'RESET_PIN_STATES' });
           setConnecting(null);
           toast('⚠ Нельзя соединить пины одного компонента');
           return;
         }
-        if (pin.state === 'occupied') { toast('⚠ Пин уже занят'); return; }
+
+        // Проверяем, не существует ли уже точно такое же соединение (между теми же двумя пинами)
+        const duplicate = state.wires.find(
+          (w) =>
+            (w.fromConn === connecting.connId && w.fromPin === connecting.pinIdx &&
+             w.toConn === connId && w.toPin === pinIdx) ||
+            (w.fromConn === connId && w.fromPin === pinIdx &&
+             w.toConn === connecting.connId && w.toPin === connecting.pinIdx)
+        );
+        if (duplicate) {
+          dispatch({ type: 'RESET_PIN_STATES' });
+          setConnecting(null);
+          toast('⚠ Такое соединение уже существует');
+          return;
+        }
+
         setPendingTarget({ connId, pinIdx });
         setColorPickerPos({ x: 400, y: 300 });
       }
     },
-    [connecting, state.connectors] // eslint-disable-line
+    [connecting, state.connectors, state.wires, state.highlightedPinIds] // eslint-disable-line
   );
 
   const handleConfirmWire = useCallback(() => {
@@ -166,7 +214,7 @@ export default function App() {
       pins: Array.from({ length: def.rows * def.cols }, (_, i) => ({
         id: i,
         state: 'free',
-        wireId: null,
+        wireIds: [],
       })),
     };
     dispatch({ type: 'ADD_CONNECTOR', payload: nc });
@@ -179,6 +227,8 @@ export default function App() {
   const handleSelectConnector = useCallback((id: string | null) => {
     dispatch({ type: 'SELECT_CONNECTOR', payload: id });
     dispatch({ type: 'SET_HIGHLIGHTED_CONNECTOR', payload: id });
+    // Снимаем подсветку пинов при выборе коннектора
+    dispatch({ type: 'SET_HIGHLIGHTED_PINS', payload: [] });
   }, []);
 
   // ── Zoom to fit (upper) ───────────────────────────────────────
@@ -270,15 +320,30 @@ export default function App() {
             const def = getConnDef(c.libId);
             return {
               ...c,
-              pins: c.pins ?? Array.from({ length: def.rows * def.cols }, (_, i) => ({ id: i, state: 'free', wireId: null })),
+              pins: c.pins
+                ? c.pins.map((p: any) => ({
+                    ...p,
+                    wireIds: p.wireIds ?? (p.wireId ? [p.wireId] : []),
+                  }))
+                : Array.from({ length: def.rows * def.cols }, (_, i) => ({
+                    id: i,
+                    state: 'free',
+                    wireIds: [],
+                  })),
             };
           });
           const wires: Wire[] = data.connections ?? [];
           wires.forEach((w) => {
             const fc = connectors.find((c) => c.id === w.fromConn);
             const tc = connectors.find((c) => c.id === w.toConn);
-            if (fc) { fc.pins[w.fromPin].state = 'occupied'; fc.pins[w.fromPin].wireId = w.id; }
-            if (tc) { tc.pins[w.toPin].state = 'occupied'; tc.pins[w.toPin].wireId = w.id; }
+            if (fc) {
+              const p = fc.pins[w.fromPin];
+              if (p) { p.state = 'occupied'; if (!p.wireIds.includes(w.id)) p.wireIds.push(w.id); }
+            }
+            if (tc) {
+              const p = tc.pins[w.toPin];
+              if (p) { p.state = 'occupied'; if (!p.wireIds.includes(w.id)) p.wireIds.push(w.id); }
+            }
           });
           dispatch({
             type: 'LOAD_PROJECT',
@@ -410,6 +475,7 @@ export default function App() {
     : state.selectedWireId ? 'Выбран провод'
     : state.selectedHarnessNodeId ? 'Выбран узел жгута'
     : state.selectedHarnessEdgeId ? 'Выбран сегмент жгута'
+    : state.highlightedPinIds.length > 0 ? `🔗 Подсвечено пинов: ${state.highlightedPinIds.length}`
     : connecting ? '⚡ Выберите второй пин'
     : harnessConnectingFrom ? '⚡ Выберите второй узел'
     : 'Ничего не выбрано';
@@ -449,6 +515,7 @@ export default function App() {
               selectedConnId={state.selectedConnId}
               selectedWireId={state.selectedWireId}
               connecting={connecting}
+              highlightedPinIds={state.highlightedPinIds}
               onViewportChange={(vp) => dispatch({ type: 'SET_VIEWPORT', payload: vp })}
               onMoveConnector={(id, x, y) => dispatch({ type: 'MOVE_CONNECTOR', payload: { id, x, y } })}
               onSelectConnector={handleSelectConnector}
