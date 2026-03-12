@@ -49,6 +49,94 @@ body {
   min-height: 0;
 }
 
+/* ═══════════════════ CENTER COLUMN ═══════════════════ */
+.ws-center-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ═══════════════════ SPLITTER ═══════════════════ */
+.ws-splitter {
+  height: 6px;
+  flex-shrink: 0;
+  background: var(--ws-surface);
+  border-top: 1px solid var(--ws-border);
+  border-bottom: 1px solid var(--ws-border);
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  z-index: 10;
+}
+.ws-splitter:hover { background: var(--ws-surface3); }
+
+.ws-splitter-handle {
+  width: 40px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ws-border2);
+}
+.ws-splitter:hover .ws-splitter-handle { background: var(--ws-accent2); }
+
+/* ═══════════════════ HARNESS AREA ═══════════════════ */
+.ws-harness-wrap {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+  background: var(--ws-bg);
+}
+
+.ws-harness-panel {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--ws-surface);
+  border-right: 1px solid var(--ws-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ws-harness-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--ws-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.ws-harness-title {
+  font-size: 10px;
+  font-family: var(--ws-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ws-text-dim);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.ws-harness-props {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ws-border2) transparent;
+}
+.ws-harness-props::-webkit-scrollbar { width: 3px; }
+.ws-harness-props::-webkit-scrollbar-thumb { background: var(--ws-border2); border-radius: 2px; }
+
+.ws-harness-canvas-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
 /* ═══════════════════ HEADER / TOOLBAR ═══════════════════ */
 .ws-header {
   height: 48px;

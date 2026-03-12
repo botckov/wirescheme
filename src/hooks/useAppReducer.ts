@@ -1,13 +1,15 @@
-import type { AppState, AppAction, Connector, Wire } from '../types';
+import type { AppState, AppAction, Connector, Wire, HarnessNode, HarnessEdge } from '../types';
 import { getConnDef } from '../utils/geometry';
 import { uid } from '../utils/geometry';
 
 const MAX_HISTORY = 20;
 
-function cloneState(state: AppState): { connectors: Connector[]; wires: Wire[] } {
+function cloneState(state: AppState) {
   return {
     connectors: JSON.parse(JSON.stringify(state.connectors)),
     wires: JSON.parse(JSON.stringify(state.wires)),
+    harnessNodes: JSON.parse(JSON.stringify(state.harnessNodes)),
+    harnessEdges: JSON.parse(JSON.stringify(state.harnessEdges)),
   };
 }
 
@@ -22,10 +24,17 @@ export const initialState: AppState = {
   history: [],
   connectorCounter: 0,
   wireCounter: 0,
+  harnessNodes: [],
+  harnessEdges: [],
+  selectedHarnessNodeId: null,
+  selectedHarnessEdgeId: null,
+  harnessViewport: { x: 40, y: 40, scale: 1 },
+  highlightedConnectorId: null,
 };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
+
     // ── Connectors ─────────────────────────────────────────────────
     case 'ADD_CONNECTOR': {
       const history = [...state.history, cloneState(state)].slice(-MAX_HISTORY);
@@ -103,7 +112,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         .filter((w) => w.fromConn === action.payload || w.toConn === action.payload)
         .map((w) => w.id);
 
-      // Clean up connected wire's pin states on the OTHER connector
       let updatedConnectors = state.connectors.filter((c) => c.id !== action.payload);
       affectedWires.forEach((wid) => {
         const wire = state.wires.find((w) => w.id === wid);
@@ -121,11 +129,17 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         });
       });
 
+      // Также обновляем узлы жгута — убираем ссылку на удалённый коннектор
+      const updatedHarnessNodes = state.harnessNodes.map((n) =>
+        n.connectorId === action.payload ? { ...n, connectorId: undefined } : n
+      );
+
       return {
         ...state,
         history,
         connectors: updatedConnectors,
         wires: state.wires.filter((w) => !affectedWires.includes(w.id)),
+        harnessNodes: updatedHarnessNodes,
         selectedConnId: state.selectedConnId === action.payload ? null : state.selectedConnId,
         selectedWireId: affectedWires.includes(state.selectedWireId ?? '') ? null : state.selectedWireId,
       };
@@ -136,7 +150,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const history = [...state.history, cloneState(state)].slice(-MAX_HISTORY);
       const wire = action.payload;
 
-      // Mark pins as occupied
       const connectors = state.connectors.map((c) => {
         if (c.id === wire.fromConn) {
           return {
@@ -243,6 +256,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         history: state.history.slice(0, -1),
         selectedConnId: null,
         selectedWireId: null,
+        selectedHarnessNodeId: null,
+        selectedHarnessEdgeId: null,
       };
     }
 
@@ -253,8 +268,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         history,
         connectors: [],
         wires: [],
+        harnessNodes: [],
+        harnessEdges: [],
         selectedConnId: null,
         selectedWireId: null,
+        selectedHarnessNodeId: null,
+        selectedHarnessEdgeId: null,
       };
     }
 
@@ -266,9 +285,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         history,
         connectors: action.payload.connectors,
         wires: action.payload.wires,
+        harnessNodes: action.payload.harnessNodes ?? [],
+        harnessEdges: action.payload.harnessEdges ?? [],
         connectorCounter: maxNum,
         selectedConnId: null,
         selectedWireId: null,
+        selectedHarnessNodeId: null,
+        selectedHarnessEdgeId: null,
       };
     }
 
@@ -293,6 +316,120 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         }),
       };
     }
+
+    // ══════════════════════════════════════════════════════════════
+    // HARNESS ACTIONS
+    // ══════════════════════════════════════════════════════════════
+
+    case 'ADD_HARNESS_NODE': {
+      const history = [...state.history, cloneState(state)].slice(-MAX_HISTORY);
+      return {
+        ...state,
+        history,
+        harnessNodes: [...state.harnessNodes, action.payload],
+        selectedHarnessNodeId: action.payload.id,
+        selectedHarnessEdgeId: null,
+        selectedConnId: null,
+        selectedWireId: null,
+      };
+    }
+
+    case 'MOVE_HARNESS_NODE': {
+      return {
+        ...state,
+        harnessNodes: state.harnessNodes.map((n) =>
+          n.id === action.payload.id
+            ? { ...n, x: action.payload.x, y: action.payload.y }
+            : n
+        ),
+      };
+    }
+
+    case 'UPDATE_HARNESS_NODE': {
+      return {
+        ...state,
+        harnessNodes: state.harnessNodes.map((n) =>
+          n.id === action.payload.id ? { ...n, ...action.payload } : n
+        ),
+      };
+    }
+
+    case 'DELETE_HARNESS_NODE': {
+      const history = [...state.history, cloneState(state)].slice(-MAX_HISTORY);
+      // Удаляем все рёбра связанные с этим узлом
+      const affectedEdges = state.harnessEdges
+        .filter((e) => e.fromId === action.payload || e.toId === action.payload)
+        .map((e) => e.id);
+      return {
+        ...state,
+        history,
+        harnessNodes: state.harnessNodes.filter((n) => n.id !== action.payload),
+        harnessEdges: state.harnessEdges.filter((e) => !affectedEdges.includes(e.id)),
+        selectedHarnessNodeId:
+          state.selectedHarnessNodeId === action.payload ? null : state.selectedHarnessNodeId,
+        selectedHarnessEdgeId: affectedEdges.includes(state.selectedHarnessEdgeId ?? '')
+          ? null
+          : state.selectedHarnessEdgeId,
+      };
+    }
+
+    case 'ADD_HARNESS_EDGE': {
+      const history = [...state.history, cloneState(state)].slice(-MAX_HISTORY);
+      return {
+        ...state,
+        history,
+        harnessEdges: [...state.harnessEdges, action.payload],
+        selectedHarnessEdgeId: action.payload.id,
+        selectedHarnessNodeId: null,
+      };
+    }
+
+    case 'UPDATE_HARNESS_EDGE': {
+      return {
+        ...state,
+        harnessEdges: state.harnessEdges.map((e) =>
+          e.id === action.payload.id ? { ...e, ...action.payload } : e
+        ),
+      };
+    }
+
+    case 'DELETE_HARNESS_EDGE': {
+      const history = [...state.history, cloneState(state)].slice(-MAX_HISTORY);
+      return {
+        ...state,
+        history,
+        harnessEdges: state.harnessEdges.filter((e) => e.id !== action.payload),
+        selectedHarnessEdgeId:
+          state.selectedHarnessEdgeId === action.payload ? null : state.selectedHarnessEdgeId,
+      };
+    }
+
+    case 'SELECT_HARNESS_NODE':
+      return {
+        ...state,
+        selectedHarnessNodeId: action.payload,
+        selectedHarnessEdgeId: null,
+        selectedConnId: null,
+        selectedWireId: null,
+      };
+
+    case 'SELECT_HARNESS_EDGE':
+      return {
+        ...state,
+        selectedHarnessEdgeId: action.payload,
+        selectedHarnessNodeId: null,
+        selectedConnId: null,
+        selectedWireId: null,
+      };
+
+    case 'SET_HARNESS_VIEWPORT':
+      return {
+        ...state,
+        harnessViewport: { ...state.harnessViewport, ...action.payload },
+      };
+
+    case 'SET_HIGHLIGHTED_CONNECTOR':
+      return { ...state, highlightedConnectorId: action.payload };
 
     default:
       return state;

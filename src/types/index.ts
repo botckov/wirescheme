@@ -32,8 +32,8 @@ export interface Connector {
   libId: string;
   x: number;
   y: number;
-  rotation: number;     // 0 | 90 | 180 | 270
-  num: number;          // sequential label: Ф1, Ф2…
+  rotation: number;
+  num: number;
   label: string;
   pins: Pin[];
 }
@@ -46,9 +46,9 @@ export interface Wire {
   toConn: string;
   toPin: number;
   color: string;
-  mark: string;         // marking/label (e.g. "A3")
-  section: string;      // cross-section (e.g. "0.75 мм²")
-  signal: string;       // signal name (e.g. "+12V")
+  mark: string;
+  section: string;
+  signal: string;
 }
 
 // ── Geometry helpers ─────────────────────────────────────────────
@@ -90,6 +90,31 @@ export interface Viewport {
   scale: number;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// HARNESS (нижняя схема жгута)
+// ═══════════════════════════════════════════════════════════════
+
+export type HarnessNodeType = 'connector' | 'junction';
+
+// Узел дерева жгута
+export interface HarnessNode {
+  id: string;
+  type: HarnessNodeType;
+  label: string;          // номер фишки (напр. "568") или буква развилки ("Т")
+  connectorId?: string;   // ссылка на Connector из верхней части (только для type='connector')
+  x: number;
+  y: number;
+}
+
+// Ребро (сегмент жгута) между двумя узлами
+export interface HarnessEdge {
+  id: string;
+  fromId: string;
+  toId: string;
+  conduitType: string;    // тип гофры: "УС25", "УС22", "" — нет гофры
+  length: number;         // длина в см
+}
+
 // ── App state shape (for useReducer) ────────────────────────────
 export interface AppState {
   connectors: Connector[];
@@ -99,9 +124,16 @@ export interface AppState {
   mode: AppMode;
   viewport: Viewport;
   wiresVisible: boolean;
-  history: Array<{ connectors: Connector[]; wires: Wire[] }>;
+  history: Array<{ connectors: Connector[]; wires: Wire[]; harnessNodes: HarnessNode[]; harnessEdges: HarnessEdge[] }>;
   connectorCounter: number;
   wireCounter: number;
+  // Harness
+  harnessNodes: HarnessNode[];
+  harnessEdges: HarnessEdge[];
+  selectedHarnessNodeId: string | null;
+  selectedHarnessEdgeId: string | null;
+  harnessViewport: Viewport;
+  highlightedConnectorId: string | null; // подсветка верх ↔ низ
 }
 
 // ── Action types for useReducer ──────────────────────────────────
@@ -123,5 +155,17 @@ export type AppAction =
   | { type: 'UNDO' }
   | { type: 'SAVE_HISTORY' }
   | { type: 'CLEAR_ALL' }
-  | { type: 'LOAD_PROJECT'; payload: { connectors: Connector[]; wires: Wire[] } }
-  | { type: 'UPDATE_PIN_STATE'; payload: { connId: string; pinIdx: number; state: PinState; wireId?: string | null } };
+  | { type: 'LOAD_PROJECT'; payload: { connectors: Connector[]; wires: Wire[]; harnessNodes?: HarnessNode[]; harnessEdges?: HarnessEdge[] } }
+  | { type: 'UPDATE_PIN_STATE'; payload: { connId: string; pinIdx: number; state: PinState; wireId?: string | null } }
+  // Harness actions
+  | { type: 'ADD_HARNESS_NODE'; payload: HarnessNode }
+  | { type: 'MOVE_HARNESS_NODE'; payload: { id: string; x: number; y: number } }
+  | { type: 'UPDATE_HARNESS_NODE'; payload: Partial<HarnessNode> & { id: string } }
+  | { type: 'DELETE_HARNESS_NODE'; payload: string }
+  | { type: 'ADD_HARNESS_EDGE'; payload: HarnessEdge }
+  | { type: 'UPDATE_HARNESS_EDGE'; payload: Partial<HarnessEdge> & { id: string } }
+  | { type: 'DELETE_HARNESS_EDGE'; payload: string }
+  | { type: 'SELECT_HARNESS_NODE'; payload: string | null }
+  | { type: 'SELECT_HARNESS_EDGE'; payload: string | null }
+  | { type: 'SET_HARNESS_VIEWPORT'; payload: Partial<Viewport> }
+  | { type: 'SET_HIGHLIGHTED_CONNECTOR'; payload: string | null };
