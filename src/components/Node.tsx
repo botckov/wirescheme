@@ -78,28 +78,28 @@ const TerminalNode: React.FC<{
         />
       )}
 
-      {/* Номер кольца (label) */}
+      {/* Номер кольца */}
       <text
-        x={0} y={connector.label ? -4 : 0}
+        x={0} y={connector.label ? -5 : 0}
         textAnchor="middle"
         dominantBaseline={connector.label ? 'auto' : 'middle'}
-        fontSize={14}
+        fontSize={15}
         fontFamily="'JetBrains Mono', monospace"
         fontWeight="700"
         fill={isOccupied ? ringColor : '#c8d4f0'}
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
-        {`Ф${connector.num}`}
+        {connector.num}
       </text>
 
-      {/* Метка (номер кольца из схемы) */}
+      {/* Тип клеммы (например 16-8) */}
       {connector.label && (
         <text
-          x={0} y={8}
+          x={0} y={9}
           textAnchor="middle"
           dominantBaseline="hanging"
           fontSize={10}
-          fontFamily="'Manrope', sans-serif"
+          fontFamily="'JetBrains Mono', monospace"
           fill="#8090b0"
           style={{ pointerEvents: 'none', userSelect: 'none' }}
         >
@@ -232,7 +232,7 @@ const NodeComponent: React.FC<NodeProps> = ({
         fontSize={11} fontFamily="'Manrope', sans-serif" fontWeight="bold"
         fill="rgba(255,255,255,0.75)"
         style={{ pointerEvents: 'none', userSelect: 'none' }}>
-        {`Ф${connector.num}${connector.label ? ' ' + connector.label : ''}`}
+        {connector.num}
       </text>
     </g>
   );
