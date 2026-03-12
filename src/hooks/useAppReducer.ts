@@ -129,7 +129,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         });
       });
 
-      // Также обновляем узлы жгута — убираем ссылку на удалённый коннектор
       const updatedHarnessNodes = state.harnessNodes.map((n) =>
         n.connectorId === action.payload ? { ...n, connectorId: undefined } : n
       );
@@ -170,11 +169,21 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         return c;
       });
 
+      // Сбрасываем все active/available пины в free
+      const cleanConnectors = connectors.map((c) => ({
+        ...c,
+        pins: c.pins.map((p) =>
+          p.state === 'active' || p.state === 'available'
+            ? { ...p, state: 'free' as const }
+            : p
+        ),
+      }));
+
       return {
         ...state,
         history,
         wires: [...state.wires, wire],
-        connectors,
+        connectors: cleanConnectors,
         wireCounter: state.wireCounter + 1,
         selectedWireId: wire.id,
         selectedConnId: null,
@@ -241,6 +250,77 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'TOGGLE_WIRES':
       return { ...state, wiresVisible: !state.wiresVisible };
 
+    // ── Pin states — BATCH (один dispatch вместо N) ────────────────
+    case 'UPDATE_PIN_STATE': {
+      return {
+        ...state,
+        connectors: state.connectors.map((c) => {
+          if (c.id !== action.payload.connId) return c;
+          return {
+            ...c,
+            pins: c.pins.map((p) =>
+              p.id === action.payload.pinIdx
+                ? {
+                    ...p,
+                    state: action.payload.state,
+                    wireId: action.payload.wireId !== undefined ? action.payload.wireId : p.wireId,
+                  }
+                : p
+            ),
+          };
+        }),
+      };
+    }
+
+    // НОВЫЙ action — сбросить все active/available в free одним вызовом
+    case 'RESET_PIN_STATES': {
+      return {
+        ...state,
+        connectors: state.connectors.map((c) => ({
+          ...c,
+          pins: c.pins.map((p) =>
+            p.state === 'active' || p.state === 'available'
+              ? { ...p, state: 'free' as const }
+              : p
+          ),
+        })),
+      };
+    }
+
+    // НОВЫЙ action — установить все свободные пины других фишек в available
+    case 'SET_PINS_AVAILABLE': {
+      return {
+        ...state,
+        connectors: state.connectors.map((c) => {
+          if (c.id === action.payload.excludeConnId) return c;
+          return {
+            ...c,
+            pins: c.pins.map((p) =>
+              p.state === 'free' ? { ...p, state: 'available' as const } : p
+            ),
+          };
+        }),
+      };
+    }
+
+    // НОВЫЙ action — установить один пин в active
+    case 'SET_PIN_ACTIVE': {
+      return {
+        ...state,
+        connectors: state.connectors.map((c) => {
+          if (c.id !== action.payload.connId) return c;
+          return {
+            ...c,
+            pins: c.pins.map((p) =>
+              p.id === action.payload.pinIdx
+                ? { ...p, state: 'active' as const }
+                : p
+            ),
+          };
+        }),
+      };
+    }
+
     // ── History ────────────────────────────────────────────────────
     case 'SAVE_HISTORY': {
       const history = [...state.history, cloneState(state)].slice(-MAX_HISTORY);
@@ -295,28 +375,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
 
-    case 'UPDATE_PIN_STATE': {
-      return {
-        ...state,
-        connectors: state.connectors.map((c) => {
-          if (c.id !== action.payload.connId) return c;
-          return {
-            ...c,
-            pins: c.pins.map((p) =>
-              p.id === action.payload.pinIdx
-                ? {
-                    ...p,
-                    state: action.payload.state,
-                    wireId:
-                      action.payload.wireId !== undefined ? action.payload.wireId : p.wireId,
-                  }
-                : p
-            ),
-          };
-        }),
-      };
-    }
-
     // ══════════════════════════════════════════════════════════════
     // HARNESS ACTIONS
     // ══════════════════════════════════════════════════════════════
@@ -356,7 +414,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'DELETE_HARNESS_NODE': {
       const history = [...state.history, cloneState(state)].slice(-MAX_HISTORY);
-      // Удаляем все рёбра связанные с этим узлом
       const affectedEdges = state.harnessEdges
         .filter((e) => e.fromId === action.payload || e.toId === action.payload)
         .map((e) => e.id);

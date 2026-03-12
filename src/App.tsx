@@ -24,16 +24,13 @@ export default function App() {
   const [selectedWireColor, setSelectedWireColor] = useState('#e63030');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  // Harness connecting state
   const [harnessConnectingFrom, setHarnessConnectingFrom] = useState<string | null>(null);
 
-  // Диалог ввода номера при добавлении фишки
   const [pendingConn, setPendingConn] = useState<{ libId: string; worldX?: number; worldY?: number } | null>(null);
   const [pendingNum, setPendingNum] = useState('');
   const numInputRef = useRef<HTMLInputElement>(null);
 
-  // Resizable splitter
-  const [topHeight, setTopHeight] = useState<number>(0); // 0 = auto (60%)
+  const [topHeight, setTopHeight] = useState<number>(0);
   const splitterRef = useRef<boolean>(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -57,7 +54,7 @@ export default function App() {
         setColorPickerPos(null);
         setHarnessConnectingFrom(null);
         setPendingConn(null);
-        resetPinStates();
+        dispatch({ type: 'RESET_PIN_STATES' });
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey) {
         if (state.selectedConnId) {
@@ -79,28 +76,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [state.selectedConnId, state.selectedWireId, state.selectedHarnessNodeId, state.selectedHarnessEdgeId]); // eslint-disable-line
 
-  // ── Pin state helpers ─────────────────────────────────────────
-  function resetPinStates() {
-    state.connectors.forEach((c) => {
-      c.pins.forEach((p) => {
-        if (p.state !== 'occupied' && p.state !== 'pair') {
-          dispatch({ type: 'UPDATE_PIN_STATE', payload: { connId: c.id, pinIdx: p.id, state: 'free' } });
-        }
-      });
-    });
-  }
-
-  function setAllAvailable(fromConnId: string) {
-    state.connectors.forEach((c) => {
-      if (c.id === fromConnId) return;
-      c.pins.forEach((p) => {
-        if (p.state === 'free') {
-          dispatch({ type: 'UPDATE_PIN_STATE', payload: { connId: c.id, pinIdx: p.id, state: 'available' } });
-        }
-      });
-    });
-  }
-
   // ── Pin click handler ─────────────────────────────────────────
   const handlePinClick = useCallback(
     (connId: string, pinIdx: number) => {
@@ -110,14 +85,21 @@ export default function App() {
       if (!pin) return;
 
       if (!connecting) {
+        // Начало соединения
         if (pin.state === 'occupied') { toast('⚠ Пин уже занят'); return; }
-        dispatch({ type: 'UPDATE_PIN_STATE', payload: { connId, pinIdx, state: 'active' } });
-        setAllAvailable(connId);
+
+        // Один dispatch: активируем пин
+        dispatch({ type: 'SET_PIN_ACTIVE', payload: { connId, pinIdx } });
+        // Один dispatch: все свободные пины других фишек — available
+        dispatch({ type: 'SET_PINS_AVAILABLE', payload: { excludeConnId: connId } });
+
         setConnecting({ connId, pinIdx });
         toast('Выберите второй пин для соединения');
       } else {
+        // Завершение соединения
         if (connId === connecting.connId) {
-          resetPinStates(); setConnecting(null);
+          dispatch({ type: 'RESET_PIN_STATES' });
+          setConnecting(null);
           toast('⚠ Нельзя соединить пины одного компонента');
           return;
         }
@@ -144,16 +126,20 @@ export default function App() {
       length: 0,
     };
     dispatch({ type: 'ADD_WIRE', payload: wire });
-    setConnecting(null); setPendingTarget(null); setColorPickerPos(null);
+    setConnecting(null);
+    setPendingTarget(null);
+    setColorPickerPos(null);
     toast('⚡ Соединение создано');
   }, [connecting, pendingTarget, selectedWireColor]);
 
   const handleCancelColorPicker = useCallback(() => {
-    setConnecting(null); setPendingTarget(null); setColorPickerPos(null);
-    resetPinStates();
-  }, []); // eslint-disable-line
+    setConnecting(null);
+    setPendingTarget(null);
+    setColorPickerPos(null);
+    dispatch({ type: 'RESET_PIN_STATES' });
+  }, []);
 
-  // ── Add connector — открывает диалог ввода номера ────────────
+  // ── Add connector ─────────────────────────────────────────────
   const handleAddConnector = useCallback(
     (libId: string, worldX?: number, worldY?: number) => {
       setPendingConn({ libId, worldX, worldY });
@@ -242,7 +228,7 @@ export default function App() {
     });
   }, [state.harnessNodes, topHeight]);
 
-  // ── Zoom in/out (upper) ───────────────────────────────────────
+  // ── Zoom in/out ───────────────────────────────────────────────
   const applyZoom = (factor: number) => {
     const { scale, x, y } = state.viewport;
     const newScale = Math.max(0.15, Math.min(4, scale * factor));
@@ -320,7 +306,7 @@ export default function App() {
     toast('🗑 Холст очищен');
   }, [state.connectors.length, state.harnessNodes.length]);
 
-  // ── Harness: add nodes ────────────────────────────────────────
+  // ── Harness nodes ─────────────────────────────────────────────
   const handleAddHarnessConnectorNode = useCallback(() => {
     const n: HarnessNode = {
       id: uid('hn'),
@@ -347,7 +333,6 @@ export default function App() {
     toast('Добавлена развилка');
   }, [state.harnessNodes, state.harnessViewport]);
 
-  // ── Harness: connect nodes ────────────────────────────────────
   const handleHarnessNodeClick = useCallback((nodeId: string) => {
     if (!harnessConnectingFrom) {
       setHarnessConnectingFrom(nodeId);
@@ -359,7 +344,6 @@ export default function App() {
       toast('⚠ Нельзя соединить узел с собой');
       return;
     }
-    // Check duplicate edge
     const exists = state.harnessEdges.find(
       (e) => (e.fromId === harnessConnectingFrom && e.toId === nodeId) ||
               (e.fromId === nodeId && e.toId === harnessConnectingFrom)
@@ -382,9 +366,7 @@ export default function App() {
   }, [harnessConnectingFrom, state.harnessEdges]);
 
   const handleHarnessCanvasClick = useCallback((_x: number, _y: number) => {
-    if (harnessConnectingFrom) {
-      setHarnessConnectingFrom(null);
-    }
+    if (harnessConnectingFrom) setHarnessConnectingFrom(null);
   }, [harnessConnectingFrom]);
 
   const handleDeleteHarnessSelected = useCallback(() => {
@@ -401,13 +383,12 @@ export default function App() {
     dispatch({ type: 'UPDATE_HARNESS_NODE', payload: { id: nodeId, connectorId: connectorId || undefined } });
   }, []);
 
-  // ── Splitter drag ─────────────────────────────────────────────
+  // ── Splitter ──────────────────────────────────────────────────
   const handleSplitterMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     splitterRef.current = true;
     const startY = e.clientY;
     const startH = topHeight || (bodyRef.current?.clientHeight ?? 500) * 0.6;
-
     const onMove = (ev: MouseEvent) => {
       if (!splitterRef.current || !bodyRef.current) return;
       const totalH = bodyRef.current.clientHeight;
@@ -423,7 +404,7 @@ export default function App() {
     window.addEventListener('mouseup', onUp);
   };
 
-  // ── Derived status ────────────────────────────────────────────
+  // ── Status ────────────────────────────────────────────────────
   const statusText = state.selectedConnId
     ? `Выбрана Ф${state.connectors.find((c) => c.id === state.selectedConnId)?.num ?? ''}`
     : state.selectedWireId ? 'Выбран провод'
@@ -454,10 +435,7 @@ export default function App() {
       <div className="ws-body" ref={bodyRef}>
         <LibraryPanel onAddConnector={handleAddConnector} />
 
-        {/* ── Center column: top canvas + splitter + harness ── */}
         <div className="ws-center-col">
-
-          {/* Upper canvas */}
           <div
             className="ws-canvas-wrap"
             style={{ height: topHeight ? `${topHeight}px` : '60%', flexShrink: 0 }}
@@ -485,16 +463,10 @@ export default function App() {
             )}
           </div>
 
-          {/* Splitter */}
-          <div
-            className="ws-splitter"
-            onMouseDown={handleSplitterMouseDown}
-            title="Тяните для изменения размера"
-          >
+          <div className="ws-splitter" onMouseDown={handleSplitterMouseDown} title="Тяните для изменения размера">
             <div className="ws-splitter-handle" />
           </div>
 
-          {/* Lower harness area */}
           <div className="ws-harness-wrap">
             <HarnessPanel
               nodes={state.harnessNodes}
@@ -581,7 +553,6 @@ export default function App() {
         />
       )}
 
-      {/* ── Диалог ввода номера фишки ─────────────────────────── */}
       {pendingConn && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}
