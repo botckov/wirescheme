@@ -39,6 +39,9 @@ const TerminalNode: React.FC<{
   const wire = isOccupied && pin.wireId ? wires.find((w) => w.id === pin.wireId) : null;
   const ringColor = wire ? wire.color : isActive ? '#3eb8ff' : isAvailable ? '#3ddc84' : '#888';
 
+  // подавляем unused warning
+  void connecting;
+
   return (
     <g transform={`translate(${connector.x},${connector.y})`} style={{ cursor: 'grab' }}
       onPointerDown={(e) => onPointerDown(e, connector.id)}>
@@ -97,12 +100,13 @@ const NodeComponent: React.FC<NodeProps> = ({
   const pinW = gridW / def.cols;
   const pinH = gridH / def.rows;
 
-  const gridX = -w/2 + PIN_OUTER_PAD;
-  const gridY = -h/2 + PIN_OUTER_PAD;
+  const gridX = -w / 2 + PIN_OUTER_PAD;
+  const gridY = -h / 2 + PIN_OUTER_PAD;
 
+  // Безопасно получаем провод для пина — не падаем если wires пустой
   function getWireForPin(pinIdx: number): Wire | null {
     const pin = connector.pins[pinIdx];
-    if (!pin || !pin.wireId) return null;
+    if (!pin || pin.state !== 'occupied' || !pin.wireId) return null;
     return wires.find((wr) => wr.id === pin.wireId) ?? null;
   }
 
@@ -112,6 +116,7 @@ const NodeComponent: React.FC<NodeProps> = ({
       style={{ cursor: 'grab' }}
       onPointerDown={(e) => onPointerDown(e, connector.id)}
     >
+      {/* Фильтр тени — только один, без условий */}
       <defs>
         <filter id={`shadow_${connector.id}`} x="-30%" y="-30%" width="160%" height="160%">
           <feDropShadow dx="0" dy="4" stdDeviation={isSelected ? 10 : 4}
@@ -123,17 +128,19 @@ const NodeComponent: React.FC<NodeProps> = ({
       <rect x={-w/2} y={-h/2} width={w} height={bodyH} rx={6} ry={6}
         fill={def.color} filter={`url(#shadow_${connector.id})`} />
 
+      {/* Выделение */}
       {isSelected && (
         <rect x={-w/2} y={-h/2} width={w} height={bodyH} rx={6} ry={6}
           fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth={2.5} />
       )}
 
+      {/* Герметичный разъём */}
       {def.id === 'grey20s' && (
         <rect x={-w/2+2} y={-h/2+2} width={w-4} height={bodyH-4} rx={5} ry={5}
           fill="none" stroke="#cc5500" strokeWidth={3} />
       )}
 
-      {/* Фон всей сетки пинов */}
+      {/* Фон сетки пинов */}
       <rect x={gridX} y={gridY} width={gridW} height={gridH} rx={3} fill="#0d1018" />
 
       {/* Замок */}
@@ -151,26 +158,32 @@ const NodeComponent: React.FC<NodeProps> = ({
 
         const pin = connector.pins[pinIdx];
         const wire = getWireForPin(pinIdx);
-        const state = pin?.state ?? 'free';
+
+        // Состояние пина — защита от undefined
+        const state: string = pin?.state ?? 'free';
         const isOccupied  = state === 'occupied' || state === 'pair';
         const isActive    = state === 'active';
         const isAvailable = state === 'available';
-        const bgColor = getPinBg(state, wire?.color);
+
+        // Цвет фона — при режиме connecting occupied пины красные
+        const bgColor = (isOccupied && connecting)
+          ? '#3a1010'
+          : getPinBg(state, wire?.color);
 
         const mark   = wire?.mark   ?? '';
         const length = wire?.length ?? 0;
         const hasMark   = mark.length > 0;
         const hasLength = length > 0;
 
-        const markSize = Math.max(7, Math.min(pinW * 0.30, pinH * 0.34, 14));
-        const lenSize  = Math.max(6, Math.min(pinW * 0.23, pinH * 0.26, 11));
-        const idxSize  = Math.max(6, Math.min(pinW * 0.28, pinH * 0.28, 12));
+        const markSize = Math.max(7,  Math.min(pinW * 0.30, pinH * 0.34, 14));
+        const lenSize  = Math.max(6,  Math.min(pinW * 0.23, pinH * 0.26, 11));
+        const idxSize  = Math.max(6,  Math.min(pinW * 0.28, pinH * 0.28, 12));
 
         const borderStroke =
-          isActive    ? '#3eb8ff' :
-          isAvailable ? '#3ddc84' :
-          isOccupied  ? 'rgba(255,255,255,0.10)' :
-                        'rgba(255,255,255,0.05)';
+          isActive      ? '#3eb8ff' :
+          isAvailable   ? '#3ddc84' :
+          isOccupied    ? 'rgba(255,255,255,0.10)' :
+                          'rgba(255,255,255,0.05)';
 
         return (
           <g key={pinIdx}
@@ -185,19 +198,26 @@ const NodeComponent: React.FC<NodeProps> = ({
             )}
 
             {/* Фон пина */}
-            <rect x={px + 1} y={py + 1} width={pinW - 2} height={pinH - 2}
-              rx={CORNER} fill={bgColor}
-              stroke={borderStroke} strokeWidth={isActive || isAvailable ? 1.5 : 0.5} />
+            <rect
+              x={px + 1} y={py + 1}
+              width={pinW - 2} height={pinH - 2}
+              rx={CORNER}
+              fill={bgColor}
+              stroke={borderStroke}
+              strokeWidth={isActive || isAvailable ? 1.5 : 0.5}
+            />
 
             {/* Текст */}
-            {isOccupied && (hasMark || hasLength) ? (
+            {isOccupied && !connecting && (hasMark || hasLength) ? (
               <>
                 {hasMark && (
                   <text
                     x={px + pinW / 2}
                     y={py + pinH / 2 - (hasLength ? lenSize * 0.6 : 0)}
                     textAnchor="middle" dominantBaseline="middle"
-                    fontSize={markSize} fontFamily="'JetBrains Mono', monospace" fontWeight="700"
+                    fontSize={markSize}
+                    fontFamily="'JetBrains Mono', monospace"
+                    fontWeight="700"
                     fill="rgba(255,255,255,0.95)"
                     style={{ pointerEvents: 'none', userSelect: 'none' }}
                   >
@@ -209,7 +229,8 @@ const NodeComponent: React.FC<NodeProps> = ({
                     x={px + pinW / 2}
                     y={py + pinH / 2 + (hasMark ? markSize * 0.65 : 0)}
                     textAnchor="middle" dominantBaseline="middle"
-                    fontSize={lenSize} fontFamily="'JetBrains Mono', monospace"
+                    fontSize={lenSize}
+                    fontFamily="'JetBrains Mono', monospace"
                     fill="rgba(200,212,240,0.70)"
                     style={{ pointerEvents: 'none', userSelect: 'none' }}
                   >
@@ -218,10 +239,12 @@ const NodeComponent: React.FC<NodeProps> = ({
                 )}
               </>
             ) : (
-              <text x={px + pinW / 2} y={py + pinH / 2}
+              /* Номер пина */
+              <text
+                x={px + pinW / 2} y={py + pinH / 2}
                 textAnchor="middle" dominantBaseline="middle"
                 fontSize={idxSize} fontFamily="monospace"
-                fill={isOccupied ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.18)'}
+                fill={isOccupied ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.18)'}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
               >
                 {pinIdx + 1}
@@ -231,17 +254,23 @@ const NodeComponent: React.FC<NodeProps> = ({
         );
       })}
 
-      {/* Жирные разделители между пинами */}
+      {/* Разделители между пинами */}
       <g style={{ pointerEvents: 'none' }}>
         {Array.from({ length: def.cols - 1 }, (_, i) => {
           const x = gridX + (i + 1) * pinW;
-          return <line key={`v${i}`} x1={x} y1={gridY} x2={x} y2={gridY + gridH}
-            stroke="rgba(255,255,255,0.22)" strokeWidth={BORDER} />;
+          return (
+            <line key={`v${i}`}
+              x1={x} y1={gridY} x2={x} y2={gridY + gridH}
+              stroke="rgba(255,255,255,0.22)" strokeWidth={BORDER} />
+          );
         })}
         {Array.from({ length: def.rows - 1 }, (_, i) => {
           const y = gridY + (i + 1) * pinH;
-          return <line key={`h${i}`} x1={gridX} y1={y} x2={gridX + gridW} y2={y}
-            stroke="rgba(255,255,255,0.22)" strokeWidth={BORDER} />;
+          return (
+            <line key={`h${i}`}
+              x1={gridX} y1={y} x2={gridX + gridW} y2={y}
+              stroke="rgba(255,255,255,0.22)" strokeWidth={BORDER} />
+          );
         })}
       </g>
 
