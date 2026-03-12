@@ -9,6 +9,9 @@ export const LIBRARY: ConnectorDef[] = [
   { id: 'grey20s',  name: 'Серый герм. №23',       alias: 'GREY-20-SEAL',  color: '#556677', rows: 5, cols: 4, pin_shape: 'square', lock: 'bottom' },
   { id: 'yellow6',  name: 'Жёлтый 6-пин №9',      alias: 'YELLOW-6',      color: '#888800', rows: 2, cols: 3, pin_shape: 'rect',   lock: 'top' },
 
+  // ── Клеммы (кольца) ─────────────────────────────────────────────
+  { id: 'terminal', name: 'Клемма (кольцо)',       alias: 'TERMINAL',      color: '#1a1a1a', rows: 1, cols: 1, pin_shape: 'circle', lock: null },
+
   // ── Малые (2–6 пинов) ───────────────────────────────────────────
   { id: 'black2',   name: 'Чёрный 2-пин',          alias: 'BLACK-2',       color: '#2a2a2a', rows: 1, cols: 2, pin_shape: 'square', lock: null },
   { id: 'black3',   name: 'Чёрный 3-пин',          alias: 'BLACK-3',       color: '#2a2a2a', rows: 1, cols: 3, pin_shape: 'square', lock: null },
@@ -56,8 +59,8 @@ export const WIRE_COLORS: WireColor[] = [
 ];
 
 // ── Connector geometry constants ─────────────────────────────────
-export const PIN_SCALE = 56;       // px per pin cell (world units)
-export const PIN_OUTER_PAD = 12;   // padding around pin grid
+export const PIN_SCALE = 56;
+export const PIN_OUTER_PAD = 12;
 
 // ── CSS Design Tokens ────────────────────────────────────────────
 export const COLORS = {

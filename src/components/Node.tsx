@@ -19,29 +19,125 @@ const PIN_COLORS: Record<string, string> = {
   error:     '#ff4d4d',
 };
 
+// ── Terminal (клемма) rendering ───────────────────────────────────
+const TerminalNode: React.FC<{
+  connector: Connector;
+  wires: Wire[];
+  isSelected: boolean;
+  connecting: ConnectingState | null;
+  onPointerDown: (e: React.PointerEvent, connId: string) => void;
+  onPinClick: (connId: string, pinIdx: number) => void;
+}> = ({ connector, wires, isSelected, connecting, onPointerDown, onPinClick }) => {
+  const R = 38; // радиус клеммы
+  const pin = connector.pins[0];
+  const isOccupied = pin?.state === 'occupied';
+  const isActive = pin?.state === 'active';
+  const isAvailable = pin?.state === 'available';
+
+  const wire = isOccupied && pin.wireId ? wires.find((w) => w.id === pin.wireId) : null;
+  const ringColor = wire ? wire.color : isActive ? '#3eb8ff' : isAvailable ? '#3ddc84' : '#888';
+
+  return (
+    <g
+      transform={`translate(${connector.x},${connector.y})`}
+      style={{ cursor: 'grab' }}
+      onPointerDown={(e) => onPointerDown(e, connector.id)}
+    >
+      <defs>
+        <filter id={`tshadow_${connector.id}`} x="-40%" y="-40%" width="180%" height="180%">
+          <feDropShadow dx="0" dy="2" stdDeviation={isSelected ? 8 : 3}
+            floodColor={isSelected ? '#3eb8ff' : '#000'} floodOpacity={isSelected ? 0.8 : 0.5} />
+        </filter>
+      </defs>
+
+      {/* Внешний круг — корпус клеммы */}
+      <circle
+        r={R}
+        fill="#111318"
+        stroke={isSelected ? '#3eb8ff' : ringColor}
+        strokeWidth={isSelected ? 3 : 2.5}
+        filter={`url(#tshadow_${connector.id})`}
+      />
+
+      {/* Внутренний круг — контактное кольцо */}
+      <circle
+        r={R * 0.62}
+        fill="#0a0c10"
+        stroke={ringColor}
+        strokeWidth={isOccupied || isActive || isAvailable ? 3 : 1.5}
+        onClick={(e) => { e.stopPropagation(); onPinClick(connector.id, 0); }}
+        style={{ cursor: 'crosshair' }}
+      />
+
+      {/* Glow при active/available */}
+      {(isActive || isAvailable) && (
+        <circle r={R * 0.62} fill="none"
+          stroke={isActive ? '#3eb8ff' : '#3ddc84'}
+          strokeWidth={6} opacity={0.3}
+          style={{ pointerEvents: 'none' }}
+        />
+      )}
+
+      {/* Номер кольца (label) */}
+      <text
+        x={0} y={connector.label ? -4 : 0}
+        textAnchor="middle"
+        dominantBaseline={connector.label ? 'auto' : 'middle'}
+        fontSize={14}
+        fontFamily="'JetBrains Mono', monospace"
+        fontWeight="700"
+        fill={isOccupied ? ringColor : '#c8d4f0'}
+        style={{ pointerEvents: 'none', userSelect: 'none' }}
+      >
+        {`Ф${connector.num}`}
+      </text>
+
+      {/* Метка (номер кольца из схемы) */}
+      {connector.label && (
+        <text
+          x={0} y={8}
+          textAnchor="middle"
+          dominantBaseline="hanging"
+          fontSize={10}
+          fontFamily="'Manrope', sans-serif"
+          fill="#8090b0"
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+        >
+          {connector.label}
+        </text>
+      )}
+    </g>
+  );
+};
+
+// ── Regular connector rendering ───────────────────────────────────
 const NodeComponent: React.FC<NodeProps> = ({
-  connector,
-  wires,
-  isSelected,
-  connecting,
-  onPointerDown,
-  onPinClick,
+  connector, wires, isSelected, connecting, onPointerDown, onPinClick,
 }) => {
   const def = getConnDef(connector.libId);
+
+  // Клемма — отдельный визуал
+  if (connector.libId === 'terminal') {
+    return (
+      <TerminalNode
+        connector={connector} wires={wires} isSelected={isSelected}
+        connecting={connecting} onPointerDown={onPointerDown} onPinClick={onPinClick}
+      />
+    );
+  }
+
   const { w, h } = connSize(connector);
   const bodyH = h - (def.lock ? 14 : 0);
   const pinSize = PIN_SCALE * 0.52;
   const inPad = 6;
-
   const totalPins = def.rows * def.cols;
 
   function getPinColor(pinIdx: number): string {
     const pin = connector.pins[pinIdx];
     if (!pin) return '#3a4560';
     const { state, wireId } = pin;
-
     if (state === 'occupied') {
-      if (connecting) return '#ff4d4d'; // blocked
+      if (connecting) return '#ff4d4d';
       const wire = wireId ? wires.find((w) => w.id === wireId) : null;
       return wire ? wire.color : '#ff8c42';
     }
@@ -63,7 +159,6 @@ const NodeComponent: React.FC<NodeProps> = ({
       style={{ cursor: 'grab' }}
       onPointerDown={(e) => onPointerDown(e, connector.id)}
     >
-      {/* Shadow / glow filter applied via filter element */}
       <defs>
         <filter id={`shadow_${connector.id}`} x="-30%" y="-30%" width="160%" height="160%">
           <feDropShadow
@@ -81,78 +176,31 @@ const NodeComponent: React.FC<NodeProps> = ({
         )}
       </defs>
 
-      {/* Connector body */}
-      <rect
-        x={-w / 2}
-        y={-h / 2}
-        width={w}
-        height={bodyH}
-        rx={6}
-        ry={6}
-        fill={def.color}
-        filter={`url(#shadow_${connector.id})`}
-      />
+      <rect x={-w/2} y={-h/2} width={w} height={bodyH} rx={6} ry={6}
+        fill={def.color} filter={`url(#shadow_${connector.id})`} />
 
-      {/* Selected highlight border */}
       {isSelected && (
-        <rect
-          x={-w / 2}
-          y={-h / 2}
-          width={w}
-          height={bodyH}
-          rx={6}
-          ry={6}
-          fill="none"
-          stroke="rgba(255,255,255,0.55)"
-          strokeWidth={2.5}
-        />
+        <rect x={-w/2} y={-h/2} width={w} height={bodyH} rx={6} ry={6}
+          fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth={2.5} />
       )}
 
-      {/* Seal ring for grey20s */}
       {def.id === 'grey20s' && (
-        <rect
-          x={-w / 2 + 2}
-          y={-h / 2 + 2}
-          width={w - 4}
-          height={bodyH - 4}
-          rx={5}
-          ry={5}
-          fill="none"
-          stroke="#cc5500"
-          strokeWidth={3}
-        />
+        <rect x={-w/2+2} y={-h/2+2} width={w-4} height={bodyH-4} rx={5} ry={5}
+          fill="none" stroke="#cc5500" strokeWidth={3} />
       )}
 
-      {/* Inner cavity */}
-      <rect
-        x={-w / 2 + inPad}
-        y={-h / 2 + inPad}
-        width={w - inPad * 2}
-        height={bodyH - inPad * 2}
-        rx={4}
-        ry={4}
-        fill="#0d1018"
-      />
+      <rect x={-w/2+inPad} y={-h/2+inPad} width={w-inPad*2} height={bodyH-inPad*2}
+        rx={4} ry={4} fill="#0d1018" />
 
-      {/* Lock / clip tab */}
       {def.lock && (
-        <rect
-          x={-14}
-          y={h / 2 - 14 - (h - bodyH) / 2 - 14}
-          width={28}
-          height={12}
-          rx={3}
-          ry={3}
-          fill="#e8c547"
-        />
+        <rect x={-14} y={h/2-14-(h-bodyH)/2-14} width={28} height={12} rx={3} ry={3} fill="#e8c547" />
       )}
 
-      {/* Pins */}
       {Array.from({ length: totalPins }, (_, pinIdx) => {
         const row = Math.floor(pinIdx / def.cols);
         const col = pinIdx % def.cols;
-        const px = -w / 2 + PIN_OUTER_PAD + col * PIN_SCALE + PIN_SCALE / 2;
-        const py = -h / 2 + PIN_OUTER_PAD + row * PIN_SCALE + PIN_SCALE / 2;
+        const px = -w/2 + PIN_OUTER_PAD + col * PIN_SCALE + PIN_SCALE/2;
+        const py = -h/2 + PIN_OUTER_PAD + row * PIN_SCALE + PIN_SCALE/2;
         const color = getPinColor(pinIdx);
         const glow = shouldGlow(pinIdx);
         const pin = connector.pins[pinIdx];
@@ -160,61 +208,30 @@ const NodeComponent: React.FC<NodeProps> = ({
         const fontSize = Math.max(7, pinSize * 0.36);
 
         return (
-          <g
-            key={pinIdx}
-            onClick={(e) => {
-              e.stopPropagation();
-              onPinClick(connector.id, pinIdx);
-            }}
-            style={{ cursor: 'crosshair' }}
-          >
+          <g key={pinIdx}
+            onClick={(e) => { e.stopPropagation(); onPinClick(connector.id, pinIdx); }}
+            style={{ cursor: 'crosshair' }}>
             {glow && (
-              <rect
-                x={px - pinSize / 2 - 3}
-                y={py - pinSize / 2 - 3}
-                width={pinSize + 6}
-                height={pinSize + 6}
-                rx={4}
-                fill={color}
-                opacity={0.25}
-              />
+              <rect x={px-pinSize/2-3} y={py-pinSize/2-3}
+                width={pinSize+6} height={pinSize+6} rx={4} fill={color} opacity={0.25} />
             )}
-            <rect
-              x={px - pinSize / 2}
-              y={py - pinSize / 2}
-              width={pinSize}
-              height={pinSize}
-              rx={2}
-              fill={color}
-            />
-            <text
-              x={px}
-              y={py}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fontSize={fontSize}
-              fontFamily="monospace"
+            <rect x={px-pinSize/2} y={py-pinSize/2} width={pinSize} height={pinSize}
+              rx={2} fill={color} />
+            <text x={px} y={py} textAnchor="middle" dominantBaseline="middle"
+              fontSize={fontSize} fontFamily="monospace"
               fill={isOccupied ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.25)'}
-              style={{ pointerEvents: 'none', userSelect: 'none' }}
-            >
+              style={{ pointerEvents: 'none', userSelect: 'none' }}>
               {pinIdx + 1}
             </text>
           </g>
         );
       })}
 
-      {/* Label */}
-      <text
-        x={0}
-        y={h / 2 - (def.lock ? 2 : -2) - 14}
-        textAnchor="middle"
-        dominantBaseline="auto"
-        fontSize={11}
-        fontFamily="'Manrope', sans-serif"
-        fontWeight="bold"
+      <text x={0} y={h/2-(def.lock ? 2 : -2)-14}
+        textAnchor="middle" dominantBaseline="auto"
+        fontSize={11} fontFamily="'Manrope', sans-serif" fontWeight="bold"
         fill="rgba(255,255,255,0.75)"
-        style={{ pointerEvents: 'none', userSelect: 'none' }}
-      >
+        style={{ pointerEvents: 'none', userSelect: 'none' }}>
         {`Ф${connector.num}${connector.label ? ' ' + connector.label : ''}`}
       </text>
     </g>
